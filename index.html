@@ -1,0 +1,119 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="color-scheme" content="dark">
+  <title>Reconcile</title>
+  <link rel="stylesheet" href="assets/style.css">
+  <link rel="icon" type="image/x-icon" href="favicon.ico">
+  <link rel="icon" type="image/png" sizes="32x32" href="favicons/favicon-32x32.png">
+  <link rel="icon" type="image/png" sizes="16x16" href="favicons/favicon-16x16.png">
+  <link rel="apple-touch-icon" sizes="180x180" href="favicons/apple-touch-icon.png">
+  <link rel="manifest" href="favicons/site.webmanifest">
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
+</head>
+<body>
+
+<header>
+  <div class="logo">
+    <span class="logo-tag">// csv tooling</span>
+    <h1 class="logo-title">Reconcile <span>⇄</span></h1>
+  </div>
+  <div class="header-meta">
+    CSV · TSV → matched &amp; enriched CSV<br>
+    match · flag · copy values · runs in your browser
+  </div>
+</header>
+
+<main class="main">
+
+  <!-- Stage 1: files -->
+  <section class="stage">
+    <div class="stage-head">
+      <span class="stage-num">1</span>
+      <h2>Files</h2>
+      <span class="sub"><button class="linkbtn" id="exampleBtn">Load an example</button></span>
+    </div>
+    <div class="stage-body">
+      <div class="file-grid">
+        <div>
+          <div class="drop main" id="mainDrop">
+            <div class="lbl">Main file</div>
+            <div class="hint">The base file that gets exported with new columns added</div>
+          </div>
+          <input type="file" id="mainInput" accept=".csv,.tsv,.txt">
+          <div id="mainTag"></div>
+        </div>
+        <div>
+          <div class="drop" id="lkDrop">
+            <div class="lbl">Reference files</div>
+            <div class="hint">One or more files to match against · add as many as you need</div>
+          </div>
+          <input type="file" id="lkInput" accept=".csv,.tsv,.txt" multiple>
+          <div class="lookups-list" id="lkList"></div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Stage 2: match rules -->
+  <section class="stage">
+    <div class="stage-head">
+      <span class="stage-num">2</span>
+      <h2>Match rules</h2>
+      <span class="sub">Each rule tries its strategies top-to-bottom until one matches</span>
+    </div>
+    <div class="stage-body">
+      <div class="setups">
+        <span class="lab">Setups</span>
+        <input type="text" id="setupName" placeholder="name this setup">
+        <button class="btn ghost sm" id="saveSetup">Save</button>
+        <span class="sep"></span>
+        <select id="setupList"><option value="">Saved setups…</option></select>
+        <button class="btn ghost sm" id="loadSetup">Load</button>
+        <button class="iconbtn del" id="delSetup" title="Delete setup">🗑</button>
+        <button class="linkbtn mute" id="exportSetup">Export</button>
+        <button class="linkbtn mute" id="importBtn">Import</button>
+        <input type="file" id="importFile" accept=".json,application/json">
+      </div>
+      <div id="rulesHost"></div>
+      <button class="btn ghost" id="addRuleBtn" style="margin-top:6px">+ Add rule</button>
+    </div>
+  </section>
+
+  <!-- Stage 3: run & export -->
+  <section class="stage">
+    <div class="stage-head">
+      <span class="stage-num">3</span>
+      <h2>Run &amp; export</h2>
+    </div>
+    <div class="stage-body">
+      <div class="run-bar">
+        <button class="btn primary" id="runBtn" disabled>Run matching</button>
+        <button class="btn ghost" id="downloadBtn" hidden>Download CSV</button>
+        <button class="btn ghost" id="copyBtn" hidden>Copy CSV</button>
+        <span class="run-note" id="runNote">Add a main file and at least one rule to run.</span>
+      </div>
+      <div class="error-msg" id="runError" hidden></div>
+      <div id="statsHost"></div>
+      <div id="viewToggle"></div>
+      <div id="previewHost"></div>
+      <div id="unmatchedHost"></div>
+    </div>
+  </section>
+
+</main>
+
+<div class="toast" id="toast"></div>
+
+<footer class="site-footer">
+  <span class="footer-text">A tool by</span>
+  <a class="footer-brand" href="https://web-sights.co.uk" target="_blank" rel="noopener">
+    <img src="assets/img/web-sights-logo.svg" alt="web-sights.co.uk" class="footer-logo">
+  </a>
+</footer>
+
+<script src="assets/reconcile.js"></script>
+</body>
+</html>
