@@ -1,7 +1,7 @@
 (function(){
 "use strict";
 
-const S={main:null, lookups:[], rules:[], output:null, view:'preview'};
+const S={main:null, lookups:[], rules:[], output:null, view:'preview', alerts:{threshold:2, cols:null}};
 let uid=1; const nid=()=>'id'+(uid++);
 const STORE_KEY='reconcile.setups.v1';
 
@@ -18,6 +18,8 @@ const EQ=new Set(['trim','iexact','exact','numeric']);
 
 const $=s=>document.querySelector(s);
 const el=(t,c,txt)=>{const e=document.createElement(t); if(c)e.className=c; if(txt!=null)e.textContent=txt; return e;};
+const ICONS={trash:'<path d="M3 6h18"/><path d="M8 6V4h8v2"/><path d="M19 6l-1 14H6L5 6"/><path d="M10 11v6M14 11v6"/>', up:'<polyline points="18 15 12 9 6 15"/>', down:'<polyline points="6 9 12 15 18 9"/>', x:'<path d="M18 6L6 18M6 6l12 12"/>'};
+const iconBtn=(name,cls,title)=>{const b=el('button','iconbtn'+(cls?' '+cls:'')); b.type='button'; b.title=title; const s=document.createElementNS('http://www.w3.org/2000/svg','svg'); s.setAttribute('viewBox','0 0 24 24'); s.innerHTML=ICONS[name]; b.append(s); return b;};
 function toast(m){const t=$('#toast'); t.textContent=m; t.classList.add('show'); clearTimeout(t._t); t._t=setTimeout(()=>t.classList.remove('show'),2000);}
 
 function norm(v,op){
@@ -117,7 +119,7 @@ function process(){
     });
     perRule[perRule.length-1].unmatchedRows=unmatchedRows;
   }
-  S.output={headers,rows,newCols,perRule};
+  S.output={headers,rows,newCols,perRule,alerts:computeAlerts()};
   renderStats(perRule); renderViewToggle(); renderResults();
   $('#downloadBtn').hidden=false; $('#copyBtn').hidden=false;
   toast('Done · '+rows.length+' rows processed');
@@ -130,13 +132,13 @@ function renderFiles(){
   if(S.main){
     const tag=el('div','file-tag');
     tag.append(el('span','nm',S.main.name),el('span','meta',S.main.rows.length+' rows · '+S.main.headers.length+' cols'));
-    const x=el('button','x','✕'); x.onclick=()=>{S.main=null; renderFiles(); renderRules(); syncRun();}; tag.append(x); mt.append(tag);
+    const x=iconBtn('x','del','Remove file'); x.onclick=()=>{S.main=null; renderFiles(); renderRules(); syncRun();}; tag.append(x); mt.append(tag);
   }
   const list=$('#lkList'); list.innerHTML='';
   S.lookups.forEach(lk=>{
     const tag=el('div','file-tag');
     tag.append(el('span','nm',lk.name),el('span','meta',lk.rows.length+' rows · '+lk.headers.length+' cols'));
-    const x=el('button','x','✕'); x.onclick=()=>{S.lookups=S.lookups.filter(l=>l.id!==lk.id); S.rules.forEach(r=>{if(r.lookupId===lk.id)r.lookupId=null;}); renderFiles(); renderRules(); syncRun();}; tag.append(x); list.append(tag);
+    const x=iconBtn('x','del','Remove file'); x.onclick=()=>{S.lookups=S.lookups.filter(l=>l.id!==lk.id); S.rules.forEach(r=>{if(r.lookupId===lk.id)r.lookupId=null;}); renderFiles(); renderRules(); syncRun();}; tag.append(x); list.append(tag);
   });
 }
 
@@ -152,6 +154,7 @@ function newStrategy(n){return {id:nid(),label:'Strategy '+n,conditions:[{id:nid
 function newRule(){const lk=S.lookups[0]; return {id:nid(),name:'Rule '+(S.rules.length+1),lookupId:lk?lk.id:null,requireUnique:true,strategies:[newStrategy(1)],flag:{on:true,name:'matched'},method:{on:false,name:'match_method'},copies:[]};}
 
 function renderRules(){
+  renderAlertOpts();
   const host=$('#rulesHost'); host.innerHTML='';
   if(!S.rules.length){host.append(el('div','rules-empty','No rules yet. Add a rule to define how rows should be matched.')); return;}
   S.rules.forEach(rule=>host.append(ruleCard(rule)));
@@ -167,14 +170,13 @@ function ruleCard(rule){
   const lkSel=mkSelect(S.lookups.map(l=>l.name),lk?lk.name:'',S.lookups.length?'choose a reference file':'no reference file'); lkSel.disabled=!S.lookups.length;
   lkSel.onchange=()=>{const f=S.lookups.find(l=>l.name===lkSel.value); rule.lookupId=f?f.id:null; replaceCard(rule,card);};
   against.append(lkSel);
-  const del=el('button','iconbtn del','🗑'); del.title='Delete rule'; del.onclick=()=>{S.rules=S.rules.filter(r=>r.id!==rule.id); renderRules();};
+  const del=iconBtn('trash','del','Delete rule'); del.onclick=()=>{S.rules=S.rules.filter(r=>r.id!==rule.id); renderRules();};
   top.append(nm,against,del); card.append(top);
 
   const body=el('div','rule-body');
 
   const sb=el('div','block');
-  sb.append(el('p','block-h','Match strategies (tried in order)'));
-  sb.append(el('p','hint-row','The first strategy that finds a match wins. Put your most confident match first.'));
+  sb.append(el('p','block-h','Match strategies · first match wins'));
   rule.strategies.forEach((st,i)=>{if(i){const o=el('div','or-sep'); o.append(el('span','','OR')); sb.append(o);} sb.append(strategyEl(rule,st,i));});
   const addS=el('button','linkbtn','+ Add strategy'); addS.onclick=()=>{rule.strategies.push(newStrategy(rule.strategies.length+1)); replaceCard(rule,card);}; sb.append(addS);
   body.append(sb);
@@ -206,9 +208,9 @@ function strategyEl(rule,st,i){
   const top=el('div','strategy-top');
   const lbl=el('input','slabel'); lbl.type='text'; lbl.value=st.label; lbl.placeholder='Strategy name'; lbl.oninput=()=>st.label=lbl.value;
   const order=el('div','order');
-  const up=el('button','iconbtn','↑'); up.disabled=i===0; up.title='Move up'; up.onclick=()=>{[rule.strategies[i-1],rule.strategies[i]]=[rule.strategies[i],rule.strategies[i-1]]; renderRules();};
-  const dn=el('button','iconbtn','↓'); dn.disabled=i===rule.strategies.length-1; dn.title='Move down'; dn.onclick=()=>{[rule.strategies[i+1],rule.strategies[i]]=[rule.strategies[i],rule.strategies[i+1]]; renderRules();};
-  const rm=el('button','iconbtn del','✕'); rm.title='Remove strategy'; rm.disabled=rule.strategies.length===1; rm.onclick=()=>{rule.strategies=rule.strategies.filter(s=>s.id!==st.id); renderRules();};
+  const up=iconBtn('up','','Move up'); up.disabled=i===0; up.onclick=()=>{[rule.strategies[i-1],rule.strategies[i]]=[rule.strategies[i],rule.strategies[i-1]]; renderRules();};
+  const dn=iconBtn('down','','Move down'); dn.disabled=i===rule.strategies.length-1; dn.onclick=()=>{[rule.strategies[i+1],rule.strategies[i]]=[rule.strategies[i],rule.strategies[i+1]]; renderRules();};
+  const rm=iconBtn('x','del','Remove strategy'); rm.disabled=rule.strategies.length===1; rm.onclick=()=>{rule.strategies=rule.strategies.filter(s=>s.id!==st.id); renderRules();};
   order.append(up,dn); top.append(lbl,order,rm); wrap.append(top);
   const conds=el('div','conds');
   st.conditions.forEach((c,ci)=>{
@@ -216,7 +218,7 @@ function strategyEl(rule,st,i){
     const mSel=mkSelect(S.main?S.main.headers:[],c.mainColumn,'main column'); mSel.disabled=!S.main; mSel.onchange=()=>c.mainColumn=mSel.value;
     const opSel=el('select'); OPS.forEach(o=>{const e=el('option','',o.label); e.value=o.v; if(o.v===c.op)e.selected=true; opSel.append(e);}); opSel.onchange=()=>c.op=opSel.value;
     const lSel=mkSelect(lk?lk.headers:[],c.lookupColumn,lk?'reference column':'pick a file'); lSel.disabled=!lk; lSel.onchange=()=>c.lookupColumn=lSel.value;
-    const x=el('button','iconbtn del','✕'); x.title='Remove condition'; x.disabled=st.conditions.length===1; x.onclick=()=>{st.conditions=st.conditions.filter(k=>k.id!==c.id); renderRules();};
+    const x=iconBtn('x','del','Remove condition'); x.disabled=st.conditions.length===1; x.onclick=()=>{st.conditions=st.conditions.filter(k=>k.id!==c.id); renderRules();};
     row.append(mSel,opSel,lSel,x); conds.append(row);
     if(ci<st.conditions.length-1){const a=el('div'); a.style.cssText='margin:-2px 0 6px'; a.append(el('span','and-tag','AND')); conds.append(a);}
   });
@@ -227,8 +229,89 @@ function copyRow(rule,cp,lk){
   const row=el('div','copy-row');
   const lSel=mkSelect(lk?lk.headers:[],cp.lookupColumn,'reference column'); lSel.disabled=!lk; lSel.onchange=()=>cp.lookupColumn=lSel.value;
   const nameIn=el('input'); nameIn.type='text'; nameIn.value=cp.newName; nameIn.placeholder='new column name'; nameIn.oninput=()=>cp.newName=nameIn.value;
-  const x=el('button','iconbtn del','✕'); x.onclick=()=>{rule.copies=rule.copies.filter(k=>k.id!==cp.id); renderRules();};
+  const x=iconBtn('x','del','Remove'); x.onclick=()=>{rule.copies=rule.copies.filter(k=>k.id!==cp.id); renderRules();};
   row.append(lSel,el('span','arrow','→'),nameIn,x); return row;
+}
+
+/* ---- alerts (repeated values) ---- */
+function conditionMainCols(){const set=new Set(); S.rules.forEach(r=>r.strategies.forEach(s=>s.conditions.forEach(c=>{if(c.mainColumn)set.add(c.mainColumn);}))); return set;}
+function alertCols(){
+  if(!S.main)return [];
+  const auto=conditionMainCols();
+  const chosen=S.alerts.cols===null?auto:S.alerts.cols;
+  return S.main.headers.filter(h=>chosen.has(h));
+}
+function computeAlerts(){
+  const out={dups:[],refDups:[],cellFlags:new Map()};
+  if(!S.main)return out;
+  const thresh=Math.max(1,S.alerts.threshold|0);
+  for(const col of alertCols()){
+    const groups=new Map();
+    S.main.rows.forEach((r,i)=>{const k=norm(r[col],'trim'); if(k==='')return; const g=groups.get(k)||groups.set(k,{value:String(r[col]).trim(),rows:[]}).get(k); g.rows.push(i);});
+    for(const g of groups.values()){
+      if(g.rows.length<=thresh)continue;
+      out.dups.push({col,value:g.value,count:g.rows.length,rows:g.rows});
+      g.rows.forEach(i=>out.cellFlags.set(i+'\u0000'+col,g.rows.length));
+    }
+  }
+  out.dups.sort((a,b)=>b.count-a.count);
+  const seen=new Set();
+  for(const rule of S.rules){
+    const lk=getLookup(rule.lookupId); if(!lk)continue;
+    rule.strategies.forEach(s=>s.conditions.forEach(c=>{
+      if(!c.lookupColumn||!EQ.has(c.op))return;
+      const key=lk.id+'\u0000'+c.lookupColumn+'\u0000'+c.op; if(seen.has(key))return; seen.add(key);
+      const groups=new Map();
+      lk.rows.forEach(r=>{const k=norm(r[c.lookupColumn],c.op); if(k==='')return; const g=groups.get(k)||groups.set(k,{value:String(r[c.lookupColumn]).trim(),count:0}).get(k); g.count++;});
+      for(const g of groups.values()){if(g.count>1)out.refDups.push({file:lk.name,col:c.lookupColumn,value:g.value,count:g.count});}
+    }));
+  }
+  out.refDups.sort((a,b)=>b.count-a.count);
+  return out;
+}
+function refreshAlerts(){
+  if(!S.output)return;
+  S.output.alerts=computeAlerts();
+  renderStats(S.output.perRule); renderViewToggle(); renderResults();
+}
+function renderAlertOpts(){
+  const box=$('#alertOpts'); box.hidden=!S.main;
+  const host=$('#dupCols'); host.innerHTML='';
+  if(!S.main)return;
+  const active=new Set(alertCols());
+  S.main.headers.forEach(h=>{
+    const b=el('button','chip'+(active.has(h)?' active':''),h); b.type='button';
+    b.onclick=()=>{const set=new Set(alertCols()); set.has(h)?set.delete(h):set.add(h); S.alerts.cols=set; renderAlertOpts(); refreshAlerts();};
+    host.append(b);
+  });
+  if(!active.size)host.append(el('span','none','no columns selected · defaults to the columns used in match conditions'));
+}
+function renderAlerts(){
+  const host=$('#unmatchedHost'); const {dups,refDups}=S.output.alerts;
+  const thresh=Math.max(1,S.alerts.threshold|0);
+  if(!dups.length&&!refDups.length){host.append(el('div','um-none','No alerts · nothing repeated more than '+thresh+'× in the watched columns, and no duplicate reference keys.')); return;}
+  if(dups.length){
+    const sec=el('div','um-section');
+    const h=el('h4','um-h'); h.append(el('span','','Repeated in main file'),el('span','cnt',dups.length+' value'+(dups.length===1?'':'s'))); sec.append(h);
+    sec.append(el('p','alert-note','Values appearing more than '+thresh+'× in '+alertCols().join(', ')+'. Flagged cells are marked in the output preview.'));
+    const list=el('div','alert-list');
+    dups.forEach(d=>{
+      const row=el('div','alert-row');
+      row.append(el('span','rlabel',d.col),el('span','val',d.value),el('span','cnt','×'+d.count));
+      const shown=d.rows.slice(0,12).map(i=>i+1).join(', ');
+      row.append(el('span','rows','rows '+shown+(d.rows.length>12?' …':'')));
+      list.append(row);
+    });
+    sec.append(list); host.append(sec);
+  }
+  if(refDups.length){
+    const sec=el('div','um-section');
+    const h=el('h4','um-h'); h.append(el('span','','Duplicate keys in reference files'),el('span','cnt',refDups.length)); sec.append(h);
+    sec.append(el('p','alert-note','These values appear more than once in a reference column you match on — rows that hit them are ambiguous and are skipped when “require unique” is on.'));
+    const list=el('div','alert-list');
+    refDups.forEach(d=>{const row=el('div','alert-row'); row.append(el('span','rlabel',d.file+' · '+d.col),el('span','val',d.value),el('span','cnt','×'+d.count)); list.append(row);});
+    sec.append(list); host.append(sec);
+  }
 }
 
 /* ---- stats + results ---- */
@@ -241,6 +324,8 @@ function renderStats(perRule){
     if(res.unmatched>0){const u=el('div','stat warn'); u.append(el('div','k','Unmatched')); u.append(el('div','v',String(res.unmatched))); wrap.append(u);}
     if(res.ambiguous>0){const a=el('div','stat warn'); a.append(el('div','k','Ambiguous (skipped)')); a.append(el('div','v',String(res.ambiguous))); wrap.append(a);}
   });
+  const al=S.output&&S.output.alerts?S.output.alerts.dups.length+S.output.alerts.refDups.length:0;
+  if(al>0){const a=el('div','stat warn'); a.append(el('div','k','Alerts')); a.append(el('div','v',String(al))); wrap.append(a);}
   host.append(wrap);
 }
 function renderViewToggle(){
@@ -249,23 +334,27 @@ function renderViewToggle(){
   const seg=el('div','seg');
   const b1=el('button','','Output preview'); b1.classList.toggle('active',S.view==='preview'); b1.onclick=()=>{S.view='preview'; renderViewToggle(); renderResults();};
   const b2=el('button','','Unmatched ('+totalUn+')'); b2.classList.toggle('active',S.view==='unmatched'); b2.onclick=()=>{S.view='unmatched'; renderViewToggle(); renderResults();};
-  seg.append(b1,b2); host.append(seg);
+  const al=S.output.alerts?S.output.alerts.dups.length+S.output.alerts.refDups.length:0;
+  const b3=el('button','','Alerts ('+al+')'); b3.classList.toggle('active',S.view==='alerts'); b3.onclick=()=>{S.view='alerts'; renderViewToggle(); renderResults();};
+  seg.append(b1,b2,b3); host.append(seg);
 }
 function renderResults(){
   $('#previewHost').innerHTML=''; $('#unmatchedHost').innerHTML='';
   if(!S.output)return;
-  if(S.view==='preview')renderPreview(); else renderUnmatched();
+  if(S.view==='preview')renderPreview(); else if(S.view==='alerts')renderAlerts(); else renderUnmatched();
 }
 function renderPreview(){
-  const host=$('#previewHost'); const {headers,rows,newCols}=S.output;
+  const host=$('#previewHost'); const {headers,rows,newCols}=S.output; const flags=S.output.alerts?S.output.alerts.cellFlags:new Map();
   const cap=Math.min(rows.length,200);
   const scroll=el('div','table-scroll'); const tbl=el('table');
   const thead=el('thead'); const htr=el('tr');
   headers.forEach(h=>{const th=el('th','',h); if(newCols.has(h))th.classList.add('new'); htr.append(th);}); thead.append(htr); tbl.append(thead);
   const tb=el('tbody');
-  for(let i=0;i<cap;i++){const tr=el('tr'); headers.forEach(h=>{const val=rows[i][h]??''; const td=el('td','',String(val)); if(newCols.has(h)){td.classList.add('new'); if(val==='TRUE')td.classList.add('cell-true'); if(val==='FALSE')td.classList.add('cell-false');} tr.append(td);}); tb.append(tr);}
+  for(let i=0;i<cap;i++){const tr=el('tr'); headers.forEach(h=>{const val=rows[i][h]??''; const td=el('td','',String(val)); if(newCols.has(h)){td.classList.add('new'); if(val==='TRUE')td.classList.add('cell-true'); if(val==='FALSE')td.classList.add('cell-false');}
+      const dc=flags.get(i+'\u0000'+h); if(dc){td.classList.add('dup'); td.title='“'+String(val).trim()+'” appears '+dc+'× in '+h; td.append(el('span','dup-badge','×'+dc));}
+      tr.append(td);}); tb.append(tr);}
   tbl.append(tb); scroll.append(tbl); host.append(scroll);
-  host.append(el('p','preview-note','Showing '+cap+' of '+rows.length+' rows · new columns highlighted'));
+  host.append(el('p','preview-note','Showing '+cap+' of '+rows.length+' rows · new columns highlighted · repeated values flagged ×n'));
 }
 function reasonsFor(rule,mainRow){
   const out=[];
@@ -405,7 +494,7 @@ function wireDrop(drop,input,handler){
   drop.ondrop=e=>{e.preventDefault(); drop.classList.remove('over'); handler(e.dataTransfer.files);};
   input.onchange=()=>{handler(input.files); input.value='';};
 }
-async function loadMain(files){if(!files||!files[0])return; try{S.main=await parseFile(files[0]); renderFiles(); renderRules(); syncRun();}catch(e){toast(e.message||'Could not read file');}}
+async function loadMain(files){if(!files||!files[0])return; try{S.main=await parseFile(files[0]); S.alerts.cols=null; renderFiles(); renderRules(); syncRun();}catch(e){toast(e.message||'Could not read file');}}
 async function loadLookups(files){for(const f of files){try{const d=await parseFile(f); S.lookups.push(Object.assign({id:nid()},d));}catch(e){toast(e.message||'Could not read '+f.name);}} const first=S.lookups[0]; if(first)S.rules.forEach(r=>{if(!r.lookupId)r.lookupId=first.id;}); renderFiles(); renderRules(); syncRun();}
 
 /* ---- example ---- */
@@ -416,12 +505,15 @@ function loadExample(){
     {first_name:'Will',last_name:'Turner',email_address:'',company:'Blacksmith Ltd'},
     {first_name:'Hector',last_name:'Barbossa',email_address:'hector@pearl.io',company:'Black Pearl'},
     {first_name:'James',last_name:'Norrington',email_address:'jnorrington@navy.gov',company:'Royal Navy'},
+    {first_name:'Jack',last_name:'Sparrow',email_address:'Jack.Sparrow@hns.com',company:'HNS'},
+    {first_name:'J.',last_name:'Sparrow',email_address:'jack.sparrow@hns.com ',company:'HNS'},
   ]};
   const crm={id:nid(),name:'crm_export.csv',headers:['email','surname','status','account_id'],rows:[
     {email:'JACK.SPARROW@hns.com',surname:'Sparrow',status:'Active',account_id:'A-1001'},
     {email:'unknown@x.com',surname:'Turner',status:'Lead',account_id:'A-1002'},
     {email:'hector@pearl.io',surname:'Barbossa',status:'Churned',account_id:'A-1003'},
     {email:'j.norrington@navy.gov',surname:'Norringtn',status:'Active',account_id:'A-1004'},
+    {email:'w.turner@forge.co',surname:'Turner',status:'Active',account_id:'A-1005'},
   ]};
   S.main=main; S.lookups=[crm];
   S.rules=[{id:nid(),name:'CRM lookup',lookupId:crm.id,requireUnique:true,
@@ -431,7 +523,7 @@ function loadExample(){
     ],
     flag:{on:true,name:'in_crm'}, method:{on:true,name:'matched_on'},
     copies:[{id:nid(),lookupColumn:'status',newName:'crm_status'},{id:nid(),lookupColumn:'account_id',newName:'crm_account'}]}];
-  renderFiles(); renderRules(); syncRun(); toast('Example loaded — Run, then check the Unmatched tab');
+  renderFiles(); renderRules(); syncRun(); toast('Example loaded — Run, then check the Unmatched and Alerts tabs');
 }
 
 /* ---- init ---- */
@@ -442,6 +534,7 @@ $('#runBtn').onclick=()=>{try{process(); syncRun();}catch(e){const er=$('#runErr
 $('#downloadBtn').onclick=()=>saveFile(outputCSV(),outName(),'text/csv;charset=utf-8');
 $('#copyBtn').onclick=copyCSV;
 $('#exampleBtn').onclick=loadExample;
+$('#dupThresh').oninput=()=>{const n=parseInt($('#dupThresh').value,10); if(n>=1){S.alerts.threshold=n; refreshAlerts();}};
 
 $('#saveSetup').onclick=()=>{const name=$('#setupName').value.trim(); if(!name)return toast('Name the setup first'); const store=loadStore(); store[name]=serialize(name); if(saveStore(store)){refreshSetupList(name); toast('Setup “'+name+'” saved');}else toast('Could not save (storage blocked)');};
 $('#loadSetup').onclick=()=>{const name=$('#setupList').value; if(!name)return toast('Pick a setup to load'); const store=loadStore(); if(!store[name])return toast('Setup not found'); applyConfig(store[name]); $('#setupName').value=name; toast('Loaded “'+name+'”');};
@@ -453,4 +546,5 @@ $('#importFile').onchange=e=>{const f=e.target.files[0]; if(!f)return; const r=n
 document.addEventListener('change',syncRun);
 refreshSetupList('');
 renderFiles(); renderRules(); syncRun();
+if(location.hash==='#example')loadExample();
 })();

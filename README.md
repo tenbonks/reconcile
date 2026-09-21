@@ -14,6 +14,7 @@ A browser-based tool for matching rows across CSV files. Load a main file and on
 - **Match flag column** — adds a `TRUE`/`FALSE` column per rule
 - **Match method column** — records which strategy produced the match
 - **Copy values** — pull any reference columns into new columns on the main file
+- **Alert flags** — flags values repeated more than *N* times (default 2) in the columns you choose (defaults to the main-file columns used in match conditions); flagged cells get a `×3` badge in the preview and an Alerts tab lists each value with its row numbers. Duplicate keys on the reference side are always listed, since they are what makes a match ambiguous
 - **Unmatched inspector** — per-row breakdown of what each strategy looked for, plus a "find closest reference row" search (Levenshtein) to spot near-misses like typos or stray whitespace
 - **Saved setups** — save rule configurations to the browser, or export/import them as JSON. Setups store rules and column names only, never the files themselves
 - **Output preview** — first 200 rows, new columns highlighted
@@ -29,7 +30,7 @@ A browser-based tool for matching rows across CSV files. Load a main file and on
 3. Drop one or more **reference files** to match against
 4. Add a **rule**: pick the reference file, name it, and define one or more match strategies
 5. Choose what to add on match: a flag column, a method column, and/or copied values
-6. Click **Run matching**, review the stats and the **Unmatched** tab
+6. Click **Run matching**, review the stats and the **Unmatched** and **Alerts** tabs
 7. **Download CSV** or **Copy CSV**
 
 Click **Load an example** in the Files stage to see a worked setup.

@@ -43,7 +43,7 @@
             <div class="hint">The base file that gets exported with new columns added</div>
           </div>
           <input type="file" id="mainInput" accept=".csv,.tsv,.txt">
-          <div id="mainTag"></div>
+          <div class="file-tags" id="mainTag"></div>
         </div>
         <div>
           <div class="drop" id="lkDrop">
@@ -51,7 +51,7 @@
             <div class="hint">One or more files to match against · add as many as you need</div>
           </div>
           <input type="file" id="lkInput" accept=".csv,.tsv,.txt" multiple>
-          <div class="lookups-list" id="lkList"></div>
+          <div class="file-tags" id="lkList"></div>
         </div>
       </div>
     </div>
@@ -72,7 +72,7 @@
         <span class="sep"></span>
         <select id="setupList"><option value="">Saved setups…</option></select>
         <button class="btn ghost sm" id="loadSetup">Load</button>
-        <button class="iconbtn del" id="delSetup" title="Delete setup">🗑</button>
+        <button class="iconbtn del" id="delSetup" title="Delete setup"><svg viewBox="0 0 24 24"><path d="M3 6h18"/><path d="M8 6V4h8v2"/><path d="M19 6l-1 14H6L5 6"/><path d="M10 11v6M14 11v6"/></svg></button>
         <button class="linkbtn mute" id="exportSetup">Export</button>
         <button class="linkbtn mute" id="importBtn">Import</button>
         <input type="file" id="importFile" accept=".json,application/json">
@@ -94,6 +94,13 @@
         <button class="btn ghost" id="downloadBtn" hidden>Download CSV</button>
         <button class="btn ghost" id="copyBtn" hidden>Copy CSV</button>
         <span class="run-note" id="runNote">Add a main file and at least one rule to run.</span>
+      </div>
+      <div class="alert-opts" id="alertOpts" hidden>
+        <span class="lab">Alerts</span>
+        <span>Flag values repeated more than</span>
+        <input type="number" id="dupThresh" min="1" max="999" value="2" aria-label="Repeat threshold">
+        <span>× in</span>
+        <div class="chips" id="dupCols"></div>
       </div>
       <div class="error-msg" id="runError" hidden></div>
       <div id="statsHost"></div>
